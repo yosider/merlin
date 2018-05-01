@@ -1,11 +1,9 @@
-from chainer import optimizers
-from constants import *
-from merlin_chainer import Merlin
+# coding: utf-8
+from networks.constants import *
+from merlin import Merlin
 
 def main():
     agent = Merlin()
-    print(agent)
-    #optimizer = optimizers.Adam().setup(agent)
     T = 0
     reward_log = []
 
@@ -24,16 +22,12 @@ def main():
 
             if done:
                 agent.update(done)
-                #optimizer.update()
-                #agent.unchain_backward()
                 break
             elif t % TRAIN_INTERVAL == 0:
                 # run additional step for bootstrap
                 a = agent.step(s, r)
                 s, r, done, info = ENV.step(a)
                 agent.update(done)
-                #optimizer.update()
-                #agent.unchain_backward()
                 agent.reset(done=False)
 
 

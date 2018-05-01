@@ -15,7 +15,7 @@ Hp_DIM = 16
 M_DIM = 2*Z_DIM
 Kr = 2
 Krp = 2
-
+N_mem = 100
 
 # learning parameter
 GAMMA = 0.9
@@ -26,3 +26,6 @@ ALPHA_RETURN = 0.01
 ALPHA_REWARD = 0.01
 ALPHA_ACTION = 0.01
 ALPHA_ENTROPY = 0.01
+
+# misc
+EPSILON = 1e-5
