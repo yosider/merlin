@@ -1,4 +1,4 @@
-# Merlin
+# MERLIN
 This is a python implementation of "MERLIN" proposed in the paper :  
 
 * "Unsupervised Predictive Memory in a Goal-Directed Agent", DeepMind  
