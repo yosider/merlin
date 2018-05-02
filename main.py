@@ -14,7 +14,7 @@ def main():
         ep_reward = 0
 
         for t in range(1, NUM_EP_STEP+1):
-            a = agent.step(s, r)
+            a = agent.step(s, r, ep_time)
             s, r, done, info = ENV.step(a)
 
             ep_reward += r
@@ -25,7 +25,7 @@ def main():
                 break
             elif t % TRAIN_INTERVAL == 0:
                 # run additional step for bootstrap
-                a = agent.step(s, r)
+                a = agent.step(s, r, ep_time)
                 s, r, done, info = ENV.step(a)
                 agent.update(done)
                 agent.reset(done=False)

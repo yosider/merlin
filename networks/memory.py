@@ -1,36 +1,53 @@
 # coding: utf-8
 import numpy as np
-from chainer import links as L 
+from chainer import links as L
 from chainer import functions as F
 from chainer import Chain, Variable
 from networks.constants import *
-
 
 class Memory(Chain):
     def __init__(self):
         super(Memory, self).__init__()
         self.size = 1
-        self.M = np.zeros((N_mem, M_DIM), dtype=np.float32)
+        self.M = Variable(np.zeros((N_mem, M_DIM), dtype=np.float32))
+        self.W_predictor = None
+        self.W_policy = None
+        self.v_wr = Variable(np.zeros((N_mem, 1), dtype=np.float32))
+        self.v_ret = Variable(np.zeros((N_mem, 1), dtype=np.float32))
+        self.u = Variable(np.zeros((1, N_mem), dtype=np.float32))
+
     def read(self, k, b):
-        # k: (1, M_DIM*Kr), b: (1, Kr)
-        Kr = b.shape[1]
-        for i in range(Kr):
-            ki = k[:, M_DIM*i:M_DIM*(i+1)]
-            print(ki.reshape(-1))
-            print(self.M[0])
-            
-            ci = [F.matmul(ki.reshape(-1), Constant(self.M[j])) \
-                    / F.batch_l2_norm_squared(ki)[0] \
-                    / (np.linalg.norm(self.M[j]) + EPSILON) \
-                    for j in range(N_mem)]
+        # k: (1, M_DIM*kr), b: (1, kr)
+        kr = b.shape[1]
+        K = k.reshape(kr, M_DIM)
+        C = F.matmul(K, F.transpose(self.M))
+        B = F.repeat(b, N_mem).reshape(kr, N_mem)  # beta
+        if kr == Kr:
+            self.W_predictor = F.softmax(B*C)  # B*C: elementwise multiplication
+            M = F.matmul(self.W_predictor, self.M)
+        elif kr == Krp:
+            self.W_policy = F.softmax(B*C)
+            M = F.matmul(self.W_policy, self.M)
+        else:
+            raise(ValueError)
+        return M.reshape((1, -1))
 
-            #print(F.softmax(ci))
-            #print(Variable(self.M[0]))
-            #print(ci)
-            exit()
+    def write(self, z, time):
+        # update usage indicator
+        self.u += F.matmul(Variable(np.ones((1, Kr), dtype=np.float32)), self.W_predictor)
 
-            
-            
+        # update writing weights
+        v_wr = np.zeros((N_mem, 1), dtype=np.float32)
+        if time <= N_mem:
+            v_wr[time][0] = 1
+        else:
+            waste_index = F.argmin(self.u)
+            v_wr[waste_index][0] = 1
+        self.v_wr = Variable(v_wr)
+        self.v_ret = GAMMA*self.v_ret + (1-GAMMA)*self.v_wr
 
-    def write(self, z):
-        pass
+        # writing
+        # z: (1, Z_DIM)
+        z_wr = F.concat((z, Variable(np.zeros((1, Z_DIM), dtype=np.float32))))
+        z_ret = F.concat((Variable(np.zeros((1, Z_DIM), dtype=np.float32)), z))
+        self.M += F.matmul(self.v_wr, z_wr) + F.matmul(self.v_ret, z_ret)

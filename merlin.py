@@ -1,3 +1,4 @@
+# coding: utf-8
 import numpy as np
 import chainer
 from chainer import functions as F
@@ -6,14 +7,15 @@ from chainer import optimizers, Chain, Variable
 
 from networks.constants import *
 from networks.z_network import Z_network
-from networks.decoder import Decoder 
-from networks.predictor import Predictor 
-from networks.policy import Policy 
+from networks.decoder import Decoder
+from networks.predictor import Predictor
+from networks.policy import Policy
 from networks.memory import Memory
-from utils import *
+from networks.utils import *
 
 class Merlin(Chain):
     def __init__(self):
+        # Merlin performs cross-module processings．
         super(Merlin, self).__init__(
             z_network = Z_network(),
             predictor = Predictor(), #TODO: hは2層？
@@ -21,61 +23,62 @@ class Merlin(Chain):
             policy = Policy(),
             memory = Memory(),
             )
-        # module間の処理はmerlinがやる．memory以外のmodule間で共有する変数はmerlinが持つ．
         self.optimizer = optimizers.Adam()
         self.optimizer.setup(self)
 
     def reset(self, done=True):
-        self.rewards = []   # 報酬
-        self.log_pies = []  # 行動分布(対数)
-        self.V_preds = []   # 予測Value
-        self.R_preds = []   # 予測累積報酬
-        self.loss = 0
-        self.delta = 0
+        # Merlin holds variables shared between modules.
+        self.rewards = []   # reward
+        self.log_pies = []  # action distribution (logarithmic)
+        self.V_preds = []   # value prediction
+        self.R_preds = []   # accumlated reward prediction
+        self.loss = 0       # loss
 
         if done:
-            # episode終了
+            # episode finished
             self.predictor.reset()
             self.policy.reset()
             self.h = np.zeros((1,H_DIM), dtype=np.float32)
-            self.m = np.zeros((1,M_DIM), dtype=np.float32)
+            self.m = np.zeros((1,M_DIM*Kr), dtype=np.float32)
             self.actions = [np.zeros(A_DIM, dtype=np.float32)]
         else:
-            # episode継続
+            # episode goes on
             self.actions = [self.actions[-1]]
 
-    def step(self, o, r):
-        o_, a_, r_, = make_batch(o, self.actions[-1], r)
+    def step(self, o, r, time):
+        # state variable
+        o_, prev_a_, r_, = make_batch(o, self.actions[-1], r)    # add batch_size dim
         z = self.z_network(o_, a_, r_, self.h, self.m)
 
+        # policy process
         kp, bp = self.policy(z)
-
         mp = self.memory.read(kp, bp)
         log_pi, a = self.policy.get_action(z, mp)
-        #print(log_pi)
 
-        next_a_, = make_batch(a)
-        self.h, k, b = self.predictor(z, next_a_, self.m)
-        #print(k)
-        #print(self.h)
-        #print(self.m)
+        # MBP (predictor) process
+        a_, = make_batch(a)
+        self.h, k, b = self.predictor(z, a_, self.m)
         self.m = self.memory.read(k, b)
-        self.memory.write(z)
 
-        o_dec, a_dec, r_dec, V_pred, R_pred = self.decoder(z, log_pi, next_a_)
+        # memory writing
+        self.memory.write(z, time)
+
+        # decoding
+        o_dec, a_dec, r_dec, V_pred, R_pred = self.decoder(z, log_pi, a_)
         self.V_preds.append(V_pred.reshape(-1))
         self.R_preds.append(R_pred.reshape(-1))
 
-        self.loss += self._decode_loss(o_dec, o_, a_dec, a_, r_dec, r_)
+        self.loss += self._decode_loss(o_dec, o_, a_dec, prev_a_, r_dec, r_)
         self.rewards.append(r)
         self.actions.append(a)
         self.log_pies.append(log_pi.reshape(-1))
 
+        # return action index
         action = np.where(a==1)[0][0]
         return action
 
     def _decode_loss(self, o_dec, o, a_dec, a, r_dec, r):
-        # WARNING: 論文ではmeanとってない
+        # WARNING: not taking mean in the paper.
         o_loss = F.mean_squared_error(o_dec, o)
         a_loss = self._bernoulli_softmax_crossentropy(a_dec, a)
         r_loss = F.mean_squared_error(r_dec, r) / 2
@@ -88,69 +91,53 @@ class Merlin(Chain):
         return -F.sum(y * F.log_softmax(x) + (1-y) * F.log(1 - F.softmax(x)))
 
     def update(self, done):
+        # FIXME: Deal with the dimentions to smart!
         if done:
-            # bootstrap なし
+            # without bootstrap
             R_rev = [0]
             A_rev = [0]
             self.V_preds.append(0)
         else:
-            # bootstrap あり
+            # with bootstrap
             R_rev = [self.V_preds[-1]]
             A_rev = [0]
-            self.R_preds = self.R_preds[:-1]  # bootstrap分削除
+            self.R_preds = self.R_preds[:-1]  # delete bootstrap element
             self.rewards = self.rewards[:-1]
 
-        # 累積報酬計算
+        # accumulated rewards
         r_rev = self.rewards[::-1]
-        #print(r_rev)
         for r in r_rev:
             R_rev.append(r + GAMMA*R_rev[-1])
         R = np.array(R_rev[1:][::-1], dtype=Variable)
 
-        # Advantage計算
+        # advantages
         N = len(r_rev)
         assert len(self.V_preds) == N+1
         for i in range(N):
             delta = r_rev[i] + GAMMA*self.V_preds[N-i] - self.V_preds[N-i-1]
             A_rev.append(delta + GAMMA*LAMBDA*A_rev[-1])
         A = np.array(A_rev[1:][::-1])
-        #print(R)
-        #print(A)
-        #exit()
 
         # MBP loss
         V_preds = np.array(self.V_preds[:-1])
         R_preds = np.array(self.R_preds)
-        #print(V_preds.shape)
-        #print(R_preds.shape)
-        #print(R.shape)
-        #print(A.shape)
-        #print(V_preds)
-        #print(R_preds)
-        #print(R)
         assert len(R) == len(R_preds) == len(V_preds) == len(A)
         R_loss = (np.sum((V_preds - R)**2) + np.sum((R_preds - R)**2)) / 2
         self.loss += ALPHA_RETURN * R_loss
 
-        # Policy 勾配
+        # Policy gradient
         A_ = 0
         H = 0
-        self.actions = self.actions[1:]  # 初期値分削除
+        self.actions = self.actions[1:]  # delete initial action
         for i in range(N):
             log_pi = self.log_pies[i]
-            #print(log_pi)
-            #print(self.actions[i])
-            #print(A[i])
             A_ += A[i][0] * log_pi[self.actions[i]==1][0]
-            #print(F.exp(log_pi))
-            #print(log_pi)
-            #print(np.dot(F.exp(log_pi), log_pi))
             H += -ALPHA_ENTROPY * np.dot(F.exp(log_pi), log_pi)
-        self.loss -= A_ + H  # gradient ascend
+        self.loss -= A_ + H     # gradient ascend
 
         # update
         print("  loss: {}".format(self.loss))
         self.cleargrads()
         self.loss.backward()
         self.optimizer.update()
-        self.loss.unchain_backward() # 新しくlossを作り直しているのでいらん？
+        self.loss.unchain_backward()    # not needed?
