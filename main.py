@@ -1,38 +1,52 @@
 # coding: utf-8
-from networks.constants import *
+from chainer import serializers 
+
 from merlin import Merlin
+from networks.constants import *
+from networks.utils import visualize_log
 
 def main():
-    agent = Merlin()
     T = 0
-    reward_log = []
 
     for ep in range(NUM_EP):
         s, r = ENV.reset(), 0
         agent.reset()
-        ep_time = 0
         ep_reward = 0
 
-        for t in range(1, NUM_EP_STEP+1):
+        for ep_time in range(NUM_EP_STEP):
             a = agent.step(s, r, ep_time)
             s, r, done, info = ENV.step(a)
 
             ep_reward += r
-            ep_time += 1
+            T += 1
 
             if done:
                 agent.update(done)
                 break
-            elif t % TRAIN_INTERVAL == 0:
+            elif (ep_time+1) % TRAIN_INTERVAL == 0:
                 # run additional step for bootstrap
                 a = agent.step(s, r, ep_time)
                 s, r, done, info = ENV.step(a)
-                agent.update(done)
-                agent.reset(done=False)
+                agent.update(False)    # enable bootstrap regardless of done
+                agent.reset(done)
+                if done:    # episode sometimes finishes at the bootstrap step
+                    break
 
-
-        print('Episode:', ep, 'Reward:', ep_reward)
+        print('Episode:', ep, 'Step:', T, 'Reward:', ep_reward)
         reward_log.append(ep_reward)
 
+
 if __name__ == '__main__':
-    main()
+    agent = Merlin()
+    reward_log = []
+    try:
+        main()
+    except:
+        pass
+
+    # visualize learning history
+    visualize_log(reward=reward_log, loss=agent.loss_log)
+
+    # save the model
+    if SAVE_MODEL:
+        serializers.save_npz(LOGDIR+'model.npz', agent)

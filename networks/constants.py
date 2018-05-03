@@ -1,12 +1,24 @@
+import os
+from datetime import datetime 
 import gym
 
-# environment parameter
+# --- Flags
+LOGGING = True 
+SAVE_MODEL = True
+
+# --- Environment parameter
 ENV_NAME = 'CartPole-v0' # discrete action space
 ENV = gym.make(ENV_NAME)
-NUM_EP = 100
+NUM_EP = 10000000
 NUM_EP_STEP = 200
 
-# dimensions
+# --- Logfile Directory
+LOGROOT = './logs/' + ENV_NAME + '/'
+LOGDIR = LOGROOT + datetime.now().isoformat()[:16] + '/'
+if LOGGING and not os.path.exists(LOGDIR):
+    os.makedirs(LOGDIR)
+
+# --- Dimensions
 O_DIM = ENV.observation_space.shape[0] # observation dimension: 4
 A_DIM = ENV.action_space.n # action dimension: 2
 Z_DIM = O_DIM // 2 # state variable dimension: 2
@@ -17,7 +29,7 @@ Kr = 2
 Krp = 2
 N_mem = 100
 
-# learning parameter
+# --- Learning parameter
 GAMMA = 0.9
 LAMBDA = 0.2
 TRAIN_INTERVAL = 20

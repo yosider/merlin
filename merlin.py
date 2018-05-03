@@ -25,13 +25,14 @@ class Merlin(Chain):
             )
         self.optimizer = optimizers.Adam()
         self.optimizer.setup(self)
+        self.loss_log = []
 
     def reset(self, done=True):
         # Merlin holds variables shared between modules.
-        self.rewards = []   # reward
-        self.log_pies = []  # action distribution (logarithmic)
-        self.V_preds = []   # value prediction
-        self.R_preds = []   # accumlated reward prediction
+        self.rewards = []   # reward history
+        self.log_pies = []  # action distribution (logarithmic) history
+        self.V_preds = []   # value prediction history
+        self.R_preds = []   # accumlated reward prediction history
         self.loss = 0       # loss
 
         if done:
@@ -48,7 +49,7 @@ class Merlin(Chain):
     def step(self, o, r, time):
         # state variable
         o_, prev_a_, r_, = make_batch(o, self.actions[-1], r)    # add batch_size dim
-        z = self.z_network(o_, a_, r_, self.h, self.m)
+        z = self.z_network(o_, prev_a_, r_, self.h, self.m)
 
         # policy process
         kp, bp = self.policy(z)
@@ -136,7 +137,7 @@ class Merlin(Chain):
         self.loss -= A_ + H     # gradient ascend
 
         # update
-        print("  loss: {}".format(self.loss))
+        self.loss_log.append(self.loss.data)
         self.cleargrads()
         self.loss.backward()
         self.optimizer.update()

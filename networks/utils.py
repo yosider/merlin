@@ -1,9 +1,12 @@
 # coding: utf-8
 import numpy as np
+from matplotlib import pyplot as plt
+
 import chainer
 from chainer import functions as F
 from chainer import links as L
 from chainer import optimizers, Chain, Variable
+from networks.constants import *
 
 def make_batch(*xs):
     """ xs:     not batched variables.
@@ -15,3 +18,13 @@ def softmax(xs):
     """ xs: list of scalar variables. 
         return: """
     pass
+
+def visualize_log(**logs):
+    for name, array in logs.items():
+        train_times = np.arange(len(array))
+        steps = TRAIN_INTERVAL * train_times 
+        plt.plot(steps, array)
+        plt.title(name)
+        plt.xlabel('steps')
+        plt.savefig(LOGDIR + name + '.png')
+        plt.show()
