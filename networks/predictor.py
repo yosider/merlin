@@ -10,7 +10,7 @@ class Predictor(Chain):
     def __init__(self):
         super(Predictor, self).__init__(
             predictor = DeepLSTM(Z_DIM+A_DIM+M_DIM*Kr, H_DIM),
-            reader = L.Linear(H_DIM, Kr*(2*Z_DIM+1)),
+            reader = L.Linear(H_DIM, Kr*(M_DIM+1)),
         )
 
     def reset(self):
@@ -20,7 +20,7 @@ class Predictor(Chain):
         state = F.concat((z, a, m))
         h = self.predictor(state)
         i = self.reader(h)
-        k = i[:, :2*Z_DIM*Kr]
-        sc = i[:, 2*Z_DIM*Kr:]
+        k = i[:, :M_DIM*Kr]
+        sc = i[:, M_DIM*Kr:]
         b = F.softplus(sc)
         return h, k, b

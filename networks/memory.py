@@ -20,7 +20,7 @@ class Memory(Chain):
         # k: (1, M_DIM*kr), b: (1, kr)
         kr = b.shape[1]
         K = k.reshape(kr, M_DIM)
-        C = F.matmul(F.normalize(K), F.transpose(F.normalize(self.M)))
+        C = F.matmul(F.normalize(K), F.transpose(self.M))  # FIXME: error when F.normalize(self.M))
         B = F.repeat(b, N_mem).reshape(kr, N_mem)  # beta
         if kr == Kr:
             self.W_predictor = F.softmax(B*C)  # B*C: elementwise multiplication
@@ -37,17 +37,22 @@ class Memory(Chain):
         self.u += F.matmul(Variable(np.ones((1, Kr), dtype=np.float32)), self.W_predictor)
 
         # update writing weights
+        prev_v_wr = self.v_wr
         v_wr = np.zeros((N_mem, 1), dtype=np.float32)
-        if time <= N_mem:
+        if time < N_mem:
             v_wr[time][0] = 1
         else:
-            waste_index = F.argmin(self.u)
+            waste_index = int(F.argmin(self.u).data)
             v_wr[waste_index][0] = 1
         self.v_wr = Variable(v_wr)
-        self.v_ret = GAMMA*self.v_ret + (1-GAMMA)*self.v_wr
 
         # writing
         # z: (1, Z_DIM)
-        z_wr = F.concat((z, Variable(np.zeros((1, Z_DIM), dtype=np.float32))))
-        z_ret = F.concat((Variable(np.zeros((1, Z_DIM), dtype=np.float32)), z))
-        self.M += F.matmul(self.v_wr, z_wr) + F.matmul(self.v_ret, z_ret)
+        if USE_RETROACTIVE:
+            # update retroactive weights
+            self.v_ret = GAMMA*self.v_ret + (1-GAMMA)*prev_v_wr
+            z_wr = F.concat((z, Variable(np.zeros((1, Z_DIM), dtype=np.float32))))
+            z_ret = F.concat((Variable(np.zeros((1, Z_DIM), dtype=np.float32)), z))
+            self.M += F.matmul(self.v_wr, z_wr) + F.matmul(self.v_ret, z_ret)
+        else:
+            self.M += F.matmul(self.v_wr, z)

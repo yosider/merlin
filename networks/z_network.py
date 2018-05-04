@@ -19,7 +19,10 @@ class Z_network(Chain):
         )
 
     def __call__(self, o, a, r, h, m):
+        #print(o)
         o_encode = F.relu(self.o_encoder1(o))
+        #print(o_encode)
+        #print()
         o_encode = F.relu(self.o_encoder2(o_encode))
         e = F.concat((o_encode, a, r))
 

@@ -22,7 +22,7 @@ def softmax(xs):
 def visualize_log(**logs):
     for name, array in logs.items():
         train_times = np.arange(len(array))
-        steps = TRAIN_INTERVAL * train_times 
+        steps = TRAIN_INTERVAL * train_times # FIXME
         plt.plot(steps, array)
         plt.title(name)
         plt.xlabel('steps')

@@ -41,7 +41,7 @@ if __name__ == '__main__':
     reward_log = []
     try:
         main()
-    except:
+    except KeyboardInterrupt:
         pass
 
     # visualize learning history

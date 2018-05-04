@@ -35,7 +35,7 @@ class Memory(gym.Env):
             raise(ValueError, "action must be 0 ~ {}".format(self.NUM_CARD-1))
 
         card = self.cards[action]
-        if action != self.prev_action and card == self.prev_card:
+        if action != self.prev_action and (card == self.prev_card).all():
             # clear the pair
             self.cards[action] = np.zeros(self.NUM_TYPE)
             self.cards[self.prev_action] = np.zeros(self.NUM_TYPE)
@@ -51,13 +51,14 @@ class Memory(gym.Env):
         if self.done and self._is_complete():
             reward = 2.
 
-        return card, reward, done, {}
+        return card, reward, self.done, {}
 
     def _render(self, mode='human', close=False):
-        cards = np.where(self.cards == 1)[1].reshape(self.ROW, self.COL)
-        outfile = StringIO() if mode == 'ansi' else sys.stdout
-        outfile.write('\n'.join(' '.join(str(cards) for elem in row) for row in cards) + '\n')
-        return outfile
+        pass
+        #cards = np.where(self.cards == 1)[1].reshape(self.ROW, self.COL)
+        #outfile = StringIO() if mode == 'ansi' else sys.stdout
+        #outfile.write('\n'.join(' '.join(str(cards) for elem in row) for row in cards) + '\n')
+        #return outfile
 
     def _close(self):
         pass

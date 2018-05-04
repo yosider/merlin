@@ -47,7 +47,7 @@ class Merlin(Chain):
             self.actions = [self.actions[-1]]
 
     def step(self, o, r, time):
-        # state variable
+        # state variables
         o_, prev_a_, r_, = make_batch(o, self.actions[-1], r)    # add batch_size dim
         z = self.z_network(o_, prev_a_, r_, self.h, self.m)
 
@@ -76,6 +76,10 @@ class Merlin(Chain):
 
         # return action index
         action = np.where(a==1)[0][0]
+
+        # for graph cisualization
+        #self.tmp = [log_pi, self.m, mp, o_dec, a_dec, r_dec, V_pred, R_pred]
+
         return action
 
     def _decode_loss(self, o_dec, o, a_dec, a, r_dec, r):
@@ -124,7 +128,10 @@ class Merlin(Chain):
         R_preds = np.array(self.R_preds)
         assert len(R) == len(R_preds) == len(V_preds) == len(A)
         R_loss = (np.sum((V_preds - R)**2) + np.sum((R_preds - R)**2)) / 2
+        #print(self.loss)
         self.loss += ALPHA_RETURN * R_loss
+        self.loss *= ETA_MBP
+        #print(self.loss)
 
         # Policy gradient
         A_ = 0
@@ -133,10 +140,22 @@ class Merlin(Chain):
         for i in range(N):
             log_pi = self.log_pies[i]
             A_ += A[i][0] * log_pi[self.actions[i]==1][0]
-            H += -ALPHA_ENTROPY * np.dot(F.exp(log_pi), log_pi)
-        self.loss -= A_ + H     # gradient ascend
+            H += -np.dot(F.exp(log_pi), log_pi)
+        self.loss -= ETA_POLICY * (A_ + ALPHA_ENTROPY*H)     # gradient ascend
+        #print(self.loss)
+        #print()
+
+        # for graph visualization
+        #from chainer import computational_graph as c
+        #g = c.build_computational_graph(self.tmp + [self.loss])
+        #with open('graph.dot', 'w') as o:
+        #    o.write(g.dump())
+        #exit()
 
         # update
+        #self.loss = Variable(np.ones(1, dtype=np.float32)).reshape(-1)
+        #self.loss *= 1e-10  # error
+        #print(self.loss)
         self.loss_log.append(self.loss.data)
         self.cleargrads()
         self.loss.backward()
