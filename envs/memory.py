@@ -35,7 +35,7 @@ class Memory(gym.Env):
             raise(ValueError, "action must be 0 ~ {}".format(self.NUM_CARD-1))
 
         card = self.cards[action]
-        if action != self.prev_action and (card == self.prev_card).all():
+        if action != self.prev_action and (card == self.prev_card).all() and len(np.nonzero(card)[0]) > 0:
             # clear the pair
             self.cards[action] = np.zeros(self.NUM_TYPE)
             self.cards[self.prev_action] = np.zeros(self.NUM_TYPE)
