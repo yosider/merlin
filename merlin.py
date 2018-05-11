@@ -68,7 +68,7 @@ class Merlin(Chain):
         o_dec, a_dec, r_dec, V_pred, R_pred = self.decoder(z, log_pi, a_)
         self.V_preds.append(V_pred.reshape(-1))
         self.R_preds.append(R_pred.reshape(-1))
-
+        
         self.loss += self._decode_loss(o_dec, o_, a_dec, prev_a_, r_dec, r_)
         self.rewards.append(r)
         self.actions.append(a)
@@ -76,7 +76,6 @@ class Merlin(Chain):
 
         # return action index
         action = np.where(a==1)[0][0]
-
         # for graph cisualization
         #self.tmp = [log_pi, self.m, mp, o_dec, a_dec, r_dec, V_pred, R_pred]
 
@@ -93,19 +92,18 @@ class Merlin(Chain):
         """ x: prediction. unnormalized distribution.
             y: teacher
         """
-        return -F.sum(y * F.log_softmax(x) + (1-y) * F.log(1 - F.softmax(x)))
+        return -F.sum(y * F.log_softmax(x) + (1-y) * F.log(1-F.softmax(x)+EPS))
 
     def update(self, done):
-        # FIXME: Deal with the dimentions to smart!
         if done:
             # without bootstrap
-            R_rev = [0]
-            A_rev = [0]
+            R_rev = [Variable(np.zeros(1, dtype=np.float32))]
+            A_rev = [Variable(np.zeros(1, dtype=np.float32))]
             self.V_preds.append(0)
         else:
             # with bootstrap
             R_rev = [self.V_preds[-1]]
-            A_rev = [0]
+            A_rev = [Variable(np.zeros(1, dtype=np.float32))]
             self.R_preds = self.R_preds[:-1]  # delete bootstrap element
             self.rewards = self.rewards[:-1]
 
@@ -113,7 +111,7 @@ class Merlin(Chain):
         r_rev = self.rewards[::-1]
         for r in r_rev:
             R_rev.append(r + GAMMA*R_rev[-1])
-        R = np.array(R_rev[1:][::-1], dtype=Variable)
+        R = F.stack(R_rev[1:][::-1], axis=-1)   # (1, TRAIN_INTERVAL)
 
         # advantages
         N = len(r_rev)
@@ -121,17 +119,15 @@ class Merlin(Chain):
         for i in range(N):
             delta = r_rev[i] + GAMMA*self.V_preds[N-i] - self.V_preds[N-i-1]
             A_rev.append(delta + GAMMA*LAMBDA*A_rev[-1])
-        A = np.array(A_rev[1:][::-1])
+        A = F.stack(A_rev[1:][::-1], axis=-1)
 
         # MBP loss
-        V_preds = np.array(self.V_preds[:-1])
-        R_preds = np.array(self.R_preds)
+        V_preds = F.stack(self.V_preds[:-1], axis=-1)
+        R_preds = F.stack(self.R_preds, axis=-1)
         assert len(R) == len(R_preds) == len(V_preds) == len(A)
-        R_loss = (np.sum((V_preds - R)**2) + np.sum((R_preds - R)**2)) / 2
-        #print(self.loss)
+        R_loss = (F.sum(F.square(V_preds - R)) + F.sum(F.square(R_preds - R))) / 2
         self.loss += ALPHA_RETURN * R_loss
         self.loss *= ETA_MBP
-        #print(self.loss)
 
         # Policy gradient
         A_ = 0
@@ -139,23 +135,12 @@ class Merlin(Chain):
         self.actions = self.actions[1:]  # delete initial action
         for i in range(N):
             log_pi = self.log_pies[i]
-            A_ += A[i][0] * log_pi[self.actions[i]==1][0]
-            H += -np.dot(F.exp(log_pi), log_pi)
+            A_ += A[0][i] * log_pi[self.actions[i]==1][0]
+            H += -F.matmul(F.exp(log_pi), log_pi)
         self.loss -= ETA_POLICY * (A_ + ALPHA_ENTROPY*H)     # gradient ascend
         #print(self.loss)
-        #print()
-
-        # for graph visualization
-        #from chainer import computational_graph as c
-        #g = c.build_computational_graph(self.tmp + [self.loss])
-        #with open('graph.dot', 'w') as o:
-        #    o.write(g.dump())
-        #exit()
 
         # update
-        #self.loss = Variable(np.ones(1, dtype=np.float32)).reshape(-1)
-        #self.loss *= 1e-10  # error
-        #print(self.loss)
         self.loss_log.append(self.loss.data)
         self.cleargrads()
         self.loss.backward()

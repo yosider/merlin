@@ -35,7 +35,6 @@ class Policy(Chain):
         state = F.concat((z.data, self.h, m))   # Stop gradients wrt z.
         state = F.tanh(self.pi1(state))
         log_pi = F.log_softmax(self.pi2(state)) # log_softmax may be more stable.
-        print(np.min(log_pi.data, axis=-1)[0])
         #print(log_pi)
         a = np.random.multinomial(1, F.exp(log_pi)[0].data).astype(np.float32) # onehot
         return log_pi, a
