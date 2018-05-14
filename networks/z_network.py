@@ -39,4 +39,4 @@ class Z_network(Chain):
 
         gaussian = np.random.normal(size=(1,Z_DIM)).astype(np.float32)
         z = posterior[:, :Z_DIM] + F.exp(posterior[:, Z_DIM:]) * gaussian
-        return z
+        return z, prior, posterior

@@ -14,18 +14,21 @@ from networks.memory import Memory
 from networks.utils import *
 
 class Merlin(Chain):
+    """ Merlin consists of MBP (Memory Based Predictor), Policy network and Memory.
+        This class performs cross-module processings．
+    """
     def __init__(self):
-        # Merlin performs cross-module processings．
         super(Merlin, self).__init__(
             z_network = Z_network(),
-            predictor = Predictor(), #TODO: hは2層？
+            predictor = Predictor(), #TODO: h outputs 2 layers [h1, h2]
             decoder = Decoder(),
             policy = Policy(),
             memory = Memory(),
             )
         self.optimizer = optimizers.Adam()
         self.optimizer.setup(self)
-        self.loss_log = []
+        self.mbp_loss_log = []
+        self.policy_loss_log = []
 
     def reset(self, done=True):
         # Merlin holds variables shared between modules.
@@ -33,7 +36,8 @@ class Merlin(Chain):
         self.log_pies = []  # action distribution (logarithmic) history
         self.V_preds = []   # value prediction history
         self.R_preds = []   # accumlated reward prediction history
-        self.loss = 0       # loss
+        self.mbp_loss = 0       # MBP loss
+        self.policy_loss = 0    # Policy loss
 
         if done:
             # episode finished
@@ -47,9 +51,14 @@ class Merlin(Chain):
             self.actions = [self.actions[-1]]
 
     def step(self, o, r, time):
+        # Notation: variable "var_" is the variable "var" expanded dimension of batch_size.
+
         # state variables
-        o_, prev_a_, r_, = make_batch(o, self.actions[-1], r)    # add batch_size dim
-        z = self.z_network(o_, prev_a_, r_, self.h, self.m)
+        o_, prev_a_, r_, = make_batch(o, self.actions[-1], r)    # add batch_size dimension
+        z, p, q = self.z_network(o_, prev_a_, r_, self.h, self.m)
+
+        # add KL divergence D(p||q) to loss
+        self.mbp_loss += self._gaussian_kl_divergence(p, q)
 
         # policy process
         kp, bp = self.policy(z)
@@ -66,20 +75,32 @@ class Merlin(Chain):
 
         # decoding
         o_dec, a_dec, r_dec, V_pred, R_pred = self.decoder(z, log_pi, a_)
+        
+        # add reconstruction error to loss
+        self.mbp_loss += self._decode_loss(o_dec, o_, a_dec, prev_a_, r_dec, r_)
+
+        # add history
         self.V_preds.append(V_pred.reshape(-1))
         self.R_preds.append(R_pred.reshape(-1))
-        
-        self.loss += self._decode_loss(o_dec, o_, a_dec, prev_a_, r_dec, r_)
         self.rewards.append(r)
         self.actions.append(a)
         self.log_pies.append(log_pi.reshape(-1))
 
         # return action index
         action = np.where(a==1)[0][0]
-        # for graph cisualization
-        #self.tmp = [log_pi, self.m, mp, o_dec, a_dec, r_dec, V_pred, R_pred]
 
         return action
+
+    def _gaussian_kl_divergence(self, p, q):
+        p_mean = p[0][:Z_DIM]
+        p_logstd = p[0][Z_DIM:]
+        p_var = F.square(F.exp(p_logstd))
+        q_mean = q[0][:Z_DIM]
+        q_logstd = q[0][Z_DIM:]
+        q_var = F.square(F.exp(q_logstd))
+
+        kl = (F.log(q_var/p_var) + (p_var + F.square(p_mean-q_mean))/q_var - 1) * 0.5
+        return F.sum(kl)
 
     def _decode_loss(self, o_dec, o, a_dec, a, r_dec, r):
         # WARNING: not taking mean in the paper.
@@ -111,7 +132,7 @@ class Merlin(Chain):
         r_rev = self.rewards[::-1]
         for r in r_rev:
             R_rev.append(r + GAMMA*R_rev[-1])
-        R = F.stack(R_rev[1:][::-1], axis=-1)   # (1, TRAIN_INTERVAL)
+        R = F.stack(R_rev[1:][::-1])   # (TRAIN_INTERVAL, 1)
 
         # advantages
         N = len(r_rev)
@@ -119,15 +140,15 @@ class Merlin(Chain):
         for i in range(N):
             delta = r_rev[i] + GAMMA*self.V_preds[N-i] - self.V_preds[N-i-1]
             A_rev.append(delta + GAMMA*LAMBDA*A_rev[-1])
-        A = F.stack(A_rev[1:][::-1], axis=-1)
+        A = F.stack(A_rev[1:][::-1])
 
         # MBP loss
-        V_preds = F.stack(self.V_preds[:-1], axis=-1)
-        R_preds = F.stack(self.R_preds, axis=-1)
+        V_preds = F.stack(self.V_preds[:-1])
+        R_preds = F.stack(self.R_preds)
         assert len(R) == len(R_preds) == len(V_preds) == len(A)
         R_loss = (F.sum(F.square(V_preds - R)) + F.sum(F.square(R_preds - R))) / 2
-        self.loss += ALPHA_RETURN * R_loss
-        self.loss *= ETA_MBP
+        self.mbp_loss += ALPHA_RETURN * R_loss
+        self.mbp_loss *= ETA_MBP
 
         # Policy gradient
         A_ = 0
@@ -135,14 +156,23 @@ class Merlin(Chain):
         self.actions = self.actions[1:]  # delete initial action
         for i in range(N):
             log_pi = self.log_pies[i]
-            A_ += A[0][i] * log_pi[self.actions[i]==1][0]
+            A_ += A[i] * log_pi[self.actions[i]==1]
             H += -F.matmul(F.exp(log_pi), log_pi)
-        self.loss -= ETA_POLICY * (A_ + ALPHA_ENTROPY*H)     # gradient ascend
-        #print(self.loss)
+        self.policy_loss -= A_[0] + ALPHA_ENTROPY*H     # gradient ascend
+        self.policy_loss *= ETA_POLICY
 
+        #print(self.mbp_loss)
+        #print(self.policy_loss)
+        
         # update
-        self.loss_log.append(self.loss.data)
+        self.mbp_loss_log.append(self.mbp_loss.data)
+        self.policy_loss_log.append(self.policy_loss.data)
         self.cleargrads()
-        self.loss.backward()
+
+        self.mbp_loss.backward()
+        self.policy_loss.backward()
+
         self.optimizer.update()
-        self.loss.unchain_backward()    # not needed?
+
+        self.mbp_loss.unchain_backward()
+        self.policy_loss.unchain_backward()

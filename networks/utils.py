@@ -22,9 +22,9 @@ def softmax(xs):
 def visualize_log(**logs):
     for name, array in logs.items():
         train_times = np.arange(len(array))
-        steps = TRAIN_INTERVAL * train_times # FIXME
+        steps = TRAIN_INTERVAL * train_times # FIXME: not all envs run maximum steps for each episodes
         plt.plot(steps, array)
-        plt.title(name)
+        plt.title(name.replace('_', ' '))
         plt.xlabel('steps')
         plt.savefig(LOGDIR + name + '.png')
         plt.show()

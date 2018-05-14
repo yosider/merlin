@@ -46,7 +46,7 @@ if __name__ == '__main__':
 
     # visualize learning history
     if LOGGING:
-        visualize_log(reward=reward_log, loss=agent.loss_log)
+        visualize_log(reward=reward_log, MBP_loss=agent.mbp_loss_log, policy_loss=agent.policy_loss_log)
 
     # save the model
     if SAVE_MODEL:

@@ -20,7 +20,7 @@ class Memory(Chain):
         # k: (1, M_DIM*kr), b: (1, kr)
         kr = b.shape[1]
         K = k.reshape(kr, M_DIM)
-        C = F.matmul(F.normalize(K), F.transpose(F.normalize(self.M)))  # FIXME: error when F.normalize
+        C = F.matmul(F.normalize(K + EPS), F.transpose(F.normalize(self.M + EPS)))
         B = F.repeat(b, N_mem).reshape(kr, N_mem)  # beta
         if kr == Kr:
             self.W_predictor = F.softmax(B*C)  # B*C: elementwise multiplication

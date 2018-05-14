@@ -4,8 +4,8 @@ import gym
 import envs
 
 # --- Flags
-LOGGING = False
-SAVE_MODEL = False
+LOGGING = True
+SAVE_MODEL = True
 USE_RETROACTIVE = False
 
 # --- Environment parameter
@@ -44,4 +44,4 @@ ALPHA_ACTION = 1.0
 ALPHA_ENTROPY = 0.01
 
 # misc
-EPS = 1e-3
+EPS = 1e-6
