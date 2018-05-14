@@ -41,8 +41,9 @@ if __name__ == '__main__':
     reward_log = []
     try:
         main()
-    except KeyboardInterrupt:
-        pass
+    except:
+        import traceback
+        traceback.print_exc()
 
     # visualize learning history
     if LOGGING:

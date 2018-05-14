@@ -2,7 +2,7 @@
 import numpy as np
 from chainer import links as L
 from chainer import functions as F
-from chainer import Chain
+from chainer import Chain, Variable
 from networks.deeplstm import DeepLSTM
 from networks.constants import *
 
@@ -35,6 +35,12 @@ class Policy(Chain):
         state = F.concat((z.data, self.h, m))   # Stop gradients wrt z.
         state = F.tanh(self.pi1(state))
         log_pi = F.log_softmax(self.pi2(state)) # log_softmax may be more stable.
-        #print(log_pi)
-        a = np.random.multinomial(1, F.exp(log_pi)[0].data).astype(np.float32) # onehot
+        probs = F.exp(log_pi)[0]
+        
+        # avoid "ValueError: sum(pvals[:-1]) > 1.0" in numpy.multinomial
+        diff = sum(probs.data[:-1]) - 1
+        if diff > 0:
+            probs -= (diff + np.finfo(np.float32).epsneg) / (A_DIM - 1)
+
+        a = np.random.multinomial(1, probs.data).astype(np.float32) # onehot
         return log_pi, a

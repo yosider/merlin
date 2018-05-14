@@ -163,7 +163,7 @@ class Merlin(Chain):
 
         #print(self.mbp_loss)
         #print(self.policy_loss)
-        
+
         # update
         self.mbp_loss_log.append(self.mbp_loss.data)
         self.policy_loss_log.append(self.policy_loss.data)

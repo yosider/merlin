@@ -7,8 +7,8 @@ import gym.spaces
 class Memory(gym.Env):
     def __init__(self):
         super().__init__()
-        self.ROW = 4
-        self.COL = 4
+        self.ROW = 3
+        self.COL = 2
         self.NUM_CARD = self.COL*self.ROW    # number of cards
         self.NUM_TYPE = self.COL*self.ROW//2  # number of card types (== number of card pairs)
         self.NUM_EP_STEP = self.COL*self.ROW*3//2  # Optimal agent can clear all cards within this.
@@ -32,7 +32,7 @@ class Memory(gym.Env):
 
     def _step(self, action):
         if not 0 <= action < self.NUM_CARD:
-            raise(ValueError, "action must be 0 ~ {}".format(self.NUM_CARD-1))
+            raise ValueError("Action must be 0 ~ {}".format(self.NUM_CARD-1))
 
         card = self.cards[action]
         if action != self.prev_action and (card == self.prev_card).all() and len(np.nonzero(card)[0]) > 0:
