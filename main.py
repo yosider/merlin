@@ -32,7 +32,7 @@ def main():
                 if done:    # episode sometimes finishes at the bootstrap step
                     break
 
-        print('Episode:', ep, 'Step:', T, 'Reward:', ep_reward)
+        #print('Episode:', ep, 'Step:', T, 'Reward:', ep_reward)
         reward_log.append(ep_reward)
 
 

@@ -50,6 +50,8 @@ class Merlin(Chain):
             # episode goes on
             self.actions = [self.actions[-1]]
 
+        self.action_indices = []  # for debug
+
     def step(self, o, r, time):
         # Notation: variable "var_" is the variable "var" expanded dimension of batch_size.
 
@@ -88,6 +90,7 @@ class Merlin(Chain):
 
         # return action index
         action = np.where(a==1)[0][0]
+        self.action_indices.append(action)
 
         return action
 
@@ -116,6 +119,7 @@ class Merlin(Chain):
         return -F.sum(y * F.log_softmax(x) + (1-y) * F.log(1-F.softmax(x)+EPS))
 
     def update(self, done):
+        print(self.action_indices)
         if done:
             # without bootstrap
             R_rev = [Variable(np.zeros(1, dtype=np.float32))]
@@ -145,7 +149,7 @@ class Merlin(Chain):
         # MBP loss
         V_preds = F.stack(self.V_preds[:-1])
         R_preds = F.stack(self.R_preds)
-        assert len(R) == len(R_preds) == len(V_preds) == len(A)
+        #assert len(R) == len(R_preds) == len(V_preds) == len(A)
         R_loss = (F.sum(F.square(V_preds - R)) + F.sum(F.square(R_preds - R))) / 2
         self.mbp_loss += ALPHA_RETURN * R_loss
         self.mbp_loss *= ETA_MBP
@@ -161,8 +165,10 @@ class Merlin(Chain):
         self.policy_loss -= A_[0] + ALPHA_ENTROPY*H     # gradient ascend
         self.policy_loss *= ETA_POLICY
 
-        #print(self.mbp_loss)
-        #print(self.policy_loss)
+        self.mbp_loss.grad = np.ones(self.mbp_loss.data.shape, dtype=np.float32)
+        self.policy_loss.grad = np.ones(self.policy_loss.data.shape, dtype=np.float32)
+        #print(self.mbp_loss.grad)
+        #print(self.policy_loss.grad)
 
         # update
         self.mbp_loss_log.append(self.mbp_loss.data)

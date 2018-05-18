@@ -7,7 +7,7 @@ import gym.spaces
 class Memory(gym.Env):
     def __init__(self):
         super().__init__()
-        self.ROW = 3
+        self.ROW = 2
         self.COL = 2
         self.NUM_CARD = self.COL*self.ROW    # number of cards
         self.NUM_TYPE = self.COL*self.ROW//2  # number of card types (== number of card pairs)
@@ -15,43 +15,46 @@ class Memory(gym.Env):
 
         self.action_space = gym.spaces.Discrete(self.NUM_CARD)
         self.observation_space = gym.spaces.Box(low=0, high=self.NUM_TYPE, shape=(self.NUM_TYPE,))
-        self.reward_range = [0., 2.]
+        self.reward_range = [-1., 10.]
         self._reset()
 
     def _reset(self):
         # self.cards: (NUM_CARD, NUM_TYPE) 2-D array
-        order = np.repeat(np.arange(self.NUM_TYPE), 2)   # two for each card type
-        np.random.shuffle(order)
-        self.cards = np.eye(self.NUM_TYPE)[order]
+        self.cards = np.repeat(np.arange(self.NUM_TYPE), 2)   # two for each card type
+        np.random.shuffle(self.cards)
 
         self.done = False
         self.steps = 0
         self.prev_action = -1   # turned card position at the previous step
-        self.prev_card = np.zeros(self.NUM_TYPE)    # turned card (onehot) at the previous step
-        return self.prev_card   # the initial observed card is blank
+        self.prev_card = -1    # turned card type at the previous step
+        return self._onehot(self.prev_card)   # the initial observed card is blank
 
     def _step(self, action):
+        if self.done:
+            raise Warning("Memory env has already done.")
+
         if not 0 <= action < self.NUM_CARD:
             raise ValueError("Action must be 0 ~ {}".format(self.NUM_CARD-1))
 
         card = self.cards[action]
-        if action != self.prev_action and (card == self.prev_card).all() and len(np.nonzero(card)[0]) > 0:
-            # clear the pair
-            self.cards[action] = np.zeros(self.NUM_TYPE)
-            self.cards[self.prev_action] = np.zeros(self.NUM_TYPE)
-            reward = 1.
+        if card > -1 and card == self.prev_card and action != self.prev_action:
+            # not cleared, same type but not the same one
+            # -> clear the pair
+            self.cards[action] = -1
+            self.cards[self.prev_action] = -1
+            reward = 5.
         else:
-            reward = 0.
+            reward = -1.
 
         self.prev_action = action
         self.prev_card = card
         self.steps += 1
 
-        self.done = self._is_done()
-        if self.done and self._is_complete():
-            reward = 2.
+        t, c = self._is_timeup(), self._is_complete()
+        self.done = t or c
+        reward += int(c) * 5.
 
-        return card, reward, self.done, {}
+        return self._onehot(card), reward, self.done, {}
 
     def _render(self, mode='human', close=False):
         pass
@@ -66,14 +69,22 @@ class Memory(gym.Env):
     def _seed(self):
         pass
 
-    def _is_done(self):
+    def _is_timeup(self):
         if self.steps >= self.NUM_EP_STEP:
             return True
         else:
             return False
 
     def _is_complete(self):
-        if len(np.nonzero(self.cards)[0]) == 0:
+        if (self.cards == -1).all():
             return True
         else:
             return False
+
+    def _onehot(self, n):
+        x = np.zeros(self.NUM_TYPE)
+        if n < 0:
+            return x
+        else:
+            x[n] = 1
+            return x

@@ -23,17 +23,17 @@ if LOGGING and not os.path.exists(LOGDIR):
 # --- Dimensions
 O_DIM = ENV.observation_space.shape[0] # observation dimension
 A_DIM = ENV.action_space.n # action dimension
-Z_DIM = 64 # state variable dimension
-H_DIM = 96
-Hp_DIM = 96
+Z_DIM = 8 # state variable dimension
+H_DIM = 12
+Hp_DIM = 12
 M_DIM = 2*Z_DIM if USE_RETROACTIVE else Z_DIM
 Kr = 3
 Krp = 1
-N_mem = 24#40
+N_mem = 10
 
 # --- Learning parameter
-ETA_MBP = 1e-3
-ETA_POLICY = 1e-2
+ETA_MBP = 1e-2
+ETA_POLICY = 1e-1
 GAMMA = 1.0
 LAMBDA = 0.8
 TRAIN_INTERVAL = NUM_EP_STEP
@@ -41,7 +41,7 @@ ALPHA_OBS = 1.0
 ALPHA_RETURN = 1/NUM_EP_STEP
 ALPHA_REWARD = 1.0
 ALPHA_ACTION = 1.0
-ALPHA_ENTROPY = 0.01
+ALPHA_ENTROPY = 1.#0.01
 
 # misc
 EPS = 1e-6
