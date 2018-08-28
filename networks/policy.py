@@ -43,4 +43,4 @@ class Policy(Chain):
             probs -= (diff + np.finfo(np.float32).epsneg) / (A_DIM - 1)
 
         a = np.random.multinomial(1, probs.data).astype(np.float32) # onehot
-        return log_pi, a
+        return log_pi, a    # need log_pi to calc A and entropy

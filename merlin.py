@@ -53,10 +53,10 @@ class Merlin(Chain):
         self.action_indices = []  # for debug
 
     def step(self, o, r, time):
-        # Notation: variable "var_" is the variable "var" expanded dimension of batch_size.
+        # Note: variable "var_" is the "var" with batch_size dimension.
 
         # state variables
-        o_, prev_a_, r_, = make_batch(o, self.actions[-1], r)    # add batch_size dimension
+        o_, prev_a_, r_, = make_batch(o, self.actions[-1], r)    # add batch_size dimension (receive as tuple)
         z, p, q = self.z_network(o_, prev_a_, r_, self.h, self.m)
 
         # add KL divergence D(p||q) to loss

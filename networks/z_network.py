@@ -7,13 +7,16 @@ from networks.constants import *
 
 class Z_network(Chain):
     def __init__(self):
+        #TODO: search optimal size
+        enc_hid_size = 3*O_DIM
+        enc_out_size = 3*O_DIM
         super(Z_network, self).__init__(
-            o_encoder1 = L.Linear(O_DIM, 12),
-            o_encoder2 = L.Linear(12, 6),
+            o_encoder1 = L.Linear(O_DIM, enc_hid_size), 
+            o_encoder2 = L.Linear(3*O_DIM, enc_out_size),
             prior1 = L.Linear(H_DIM+M_DIM*Kr, 2*Z_DIM),
             prior2 = L.Linear(2*Z_DIM, 2*Z_DIM),
             prior3 = L.Linear(2*Z_DIM, 2*Z_DIM),
-            f_post1 = L.Linear(6+A_DIM+1+H_DIM+M_DIM*Kr+2*Z_DIM, 2*Z_DIM),
+            f_post1 = L.Linear(enc_out_size+A_DIM+1+H_DIM+M_DIM*Kr+2*Z_DIM, 2*Z_DIM),
             f_post2 = L.Linear(2*Z_DIM, 2*Z_DIM),
             f_post3 = L.Linear(2*Z_DIM, 2*Z_DIM),
         )

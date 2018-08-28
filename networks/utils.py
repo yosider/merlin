@@ -14,10 +14,8 @@ def make_batch(*xs):
     """
     return [x.reshape(1,-1) if type(x)==Variable else np.array(x, dtype=np.float32).reshape(1,-1) for x in xs]
 
-def softmax(xs):
-    """ xs: list of scalar variables. 
-        return: """
-    pass
+def make_sample_input(*size):
+    return np.random.randn(*size).astype(np.float32)
 
 def visualize_log(**logs):
     for name, array in logs.items():
