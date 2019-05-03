@@ -7,5 +7,6 @@ This is a python implementation of "MERLIN" proposed in the paper :
 using Chainer.
 
 Currently not working well :(
+
 Any PRs are more than welcome!!
 
